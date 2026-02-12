@@ -10,16 +10,16 @@ variable "server_name" {
   default     = "devbox"
 }
 
-variable "server_type" {
-  description = "Hetzner server type, e.g. cpx21"
-  type        = string
-  default     = "cpx21"
-}
-
 variable "location" {
   description = "Hetzner location, e.g. fsn1, nbg1, hel1"
   type        = string
   default     = "fsn1"
+}
+
+variable "server_type" {
+  description = "Hetzner server type, e.g. cpx21"
+  type        = string
+  default     = "cpx21"
 }
 
 variable "image" {
@@ -28,7 +28,13 @@ variable "image" {
   default     = "ubuntu-24.04"
 }
 
-variable "ssh_user" {
+variable "timezone" {
+  description = "Timezone to configure on the instance"
+  type        = string
+  default     = "Etc/UTC"
+}
+
+variable "admin_user" {
   description = "Admin username created via cloud-init"
   type        = string
   default     = "devbox"
@@ -43,4 +49,11 @@ variable "ssh_source_ips" {
   description = "Allowed source IP CIDRs for SSH ingress"
   type        = list(string)
   default     = ["0.0.0.0/0", "::/0"]
+}
+
+variable "tailscale_auth_key" {
+  description = "Optional Tailscale auth key for unattended tailscale up"
+  type        = string
+  default     = ""
+  sensitive   = true
 }
