@@ -1,5 +1,6 @@
-# Terraform
-**/.terraform/*
+# Terraform local artifacts
+.terraform/
+.terraform.lock.hcl
 *.tfstate
 *.tfstate.*
 crash.log
@@ -8,12 +9,10 @@ override.tf
 override.tf.json
 *_override.tf
 *_override.tf.json
-.terraformrc
-terraform.rc
 
-# Local variable files / secrets
+# Local variable files (may contain secrets)
 *.tfvars
 *.tfvars.json
 
-# macOS
+# Editor/OS
 .DS_Store

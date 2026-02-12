@@ -1,0 +1,103 @@
+#cloud-config
+package_update: true
+package_upgrade: true
+timezone: ${timezone}
+
+packages:
+  - git
+  - curl
+  - ca-certificates
+  - build-essential
+  - python3
+  - python3-venv
+  - python3-pip
+  - golang
+  - tmux
+  - zsh
+  - htop
+  - ripgrep
+  - fd-find
+  - ufw
+  - fail2ban
+  - gnupg
+
+users:
+  - default
+  - name: ${admin_user}
+    groups: [sudo, docker]
+    shell: /usr/bin/zsh
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    ssh_authorized_keys:
+      - ${ssh_public_key}
+
+write_files:
+  - path: /etc/ssh/sshd_config.d/99-devbox-hardening.conf
+    permissions: '0644'
+    content: |
+      PasswordAuthentication no
+      KbdInteractiveAuthentication no
+      ChallengeResponseAuthentication no
+      PermitRootLogin no
+      X11Forwarding no
+      AllowTcpForwarding yes
+      PubkeyAuthentication yes
+
+  - path: /etc/fail2ban/jail.d/sshd.local
+    permissions: '0644'
+    content: |
+      [sshd]
+      enabled = true
+      maxretry = 5
+      bantime = 1h
+      findtime = 10m
+
+  - path: /usr/local/bin/bootstrap-devbox.sh
+    permissions: '0755'
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+
+      install -m 0755 -d /etc/apt/keyrings
+
+      curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+      chmod a+r /etc/apt/keyrings/docker.gpg
+      echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo $${VERSION_CODENAME}) stable" > /etc/apt/sources.list.d/docker.list
+
+      curl -fsSL "https://pkgs.tailscale.com/stable/ubuntu/$(. /etc/os-release && echo $${VERSION_CODENAME}).noarmor.gpg" | tee /usr/share/keyrings/tailscale-archive-keyring.gpg >/dev/null
+      curl -fsSL "https://pkgs.tailscale.com/stable/ubuntu/$(. /etc/os-release && echo $${VERSION_CODENAME}).tailscale-keyring.list" | tee /etc/apt/sources.list.d/tailscale.list >/dev/null
+
+      apt-get update
+      DEBIAN_FRONTEND=noninteractive apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin tailscale
+
+      usermod -aG docker ${admin_user}
+      chsh -s /usr/bin/zsh ${admin_user}
+
+      systemctl daemon-reload
+      systemctl restart ssh
+      systemctl enable --now docker
+      systemctl enable --now fail2ban
+      systemctl enable --now tailscaled
+
+      ufw --force reset
+      ufw default deny incoming
+      ufw default allow outgoing
+      ufw allow 22/tcp
+      ufw --force enable
+
+%{ if tailscale_auth_key != "" ~}
+      tailscale up --authkey=${tailscale_auth_key} --hostname=${server_name}
+%{ else ~}
+      echo "Tailscale auth key not set. Run 'sudo tailscale up' after first login." > /etc/motd.d/99-tailscale
+%{ endif ~}
+
+  - path: /usr/local/bin/tailscale-lockdown.sh
+    permissions: '0755'
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      sudo ufw allow in on tailscale0 to any port 22 proto tcp
+      sudo ufw delete allow 22/tcp || true
+      sudo ufw status verbose
+
+runcmd:
+  - /usr/local/bin/bootstrap-devbox.sh
